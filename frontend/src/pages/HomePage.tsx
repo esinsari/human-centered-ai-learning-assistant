@@ -26,22 +26,21 @@ export default function HomePage() {
     <div className="space-y-10">
       {/* Hero */}
       <div className="text-center space-y-4 pt-6">
+        <br/><br/>
         <h1 className="text-4xl font-bold text-gray-900">
-          StriveAI
+          Human-Centered AI Learning Assistant
         </h1>
-        <p className="text-lg text-gray-600 max-w-xl mx-auto">
-          A Human-Centered AI Learning Assistant
-        </p>
+        <br/><br/>
         <Link to="/problems">
           <Button size="lg" className="mt-2 bg-black text-white hover:bg-gray-900">Start Learning →</Button>
         </Link>
+        <br/><br/>
       </div>
 
       {/* Features */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {FEATURES.map((f) => (
           <Card key={f.title} className="space-y-1">
-            <p className="text-2xl">{f.icon}</p>
             <p className="font-semibold text-gray-900">{f.title}</p>
             <p className="text-sm text-gray-600">{f.desc}</p>
           </Card>

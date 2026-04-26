@@ -28,7 +28,23 @@ export function useSession(sessionToken: string) {
 
       let guidance = undefined
       if (result.next_action === 'reflect') {
-        guidance = await handleRequestGuidance()
+        const currentStage = result.session.scaffold_stage
+        if (currentStage === 'strategy_cue' || currentStage === 'partial_hint') {
+          // Already shown guidance for this stage — advance and generate the next stage's content
+          // without requiring a new reflection (uses the /explanation endpoint)
+          store.setLoadingGuidance(true)
+          try {
+            guidance = await api.requestExplanation(sessionToken)
+            if (guidance) store.setLatestGuidance(guidance)
+            const updated = await api.getSession(sessionToken)
+            store.setSession(updated)
+          } finally {
+            store.setLoadingGuidance(false)
+          }
+        } else {
+          // First attempt wrong — get reflection prompt as usual
+          guidance = await handleRequestGuidance()
+        }
       }
       return { ...result, guidance }
     },
@@ -60,16 +76,23 @@ export function useSession(sessionToken: string) {
   const submitReflection = useCallback(
     async (responseText: string, stage: ScaffoldStage) => {
       const prompt = store.currentReflectionPrompt
-      await api.submitReflection(sessionToken, prompt, responseText, stage)
+      const result = await api.submitReflection(sessionToken, prompt, responseText, stage)
 
-      // Mark reflection done locally, then advance
+      if (!result.accepted) {
+        return { accepted: false, nudge: result.nudge ?? null, guidance: null }
+      }
+
+      // Accepted — fetch strategy cue content BEFORE advancing (reflection_done=True bypasses the
+      // reflection gate, so get_next_guidance returns strategy_cue content directly)
+      const guidance = await api.requestGuidance(sessionToken)
+
+      // Now advance stage (none → strategy_cue) and sync session
+      await api.advanceStage(sessionToken)
       const updatedSession = await api.getSession(sessionToken)
       store.setSession(updatedSession)
       store.setShowReflectionForm(false)
 
-      // Now advance and re-fetch guidance with content
-      await api.advanceStage(sessionToken)
-      return await handleRequestGuidance()
+      return { accepted: true, nudge: null, guidance }
     },
     [sessionToken, store.currentReflectionPrompt],
   )

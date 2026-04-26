@@ -116,6 +116,13 @@ class ReflectionOut(BaseModel):
         from_attributes = True
 
 
+class ReflectionResponse(BaseModel):
+    """Returned after submitting a reflection — includes AI quality evaluation."""
+    accepted: bool
+    nudge: Optional[str] = None
+    reflection: Optional[ReflectionOut] = None
+
+
 # ─── Guidance ────────────────────────────────────────────────────────────────
 
 class GuidanceRequest(BaseModel):

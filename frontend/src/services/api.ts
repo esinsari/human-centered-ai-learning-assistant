@@ -3,7 +3,7 @@ import type {
   Problem,
   LearningSession,
   AttemptResponse,
-  Reflection,
+  ReflectionResponse,
   GuidanceResponse,
   AlternativeExplanationResponse,
   TransparencyInfo,
@@ -48,7 +48,7 @@ export const submitReflection = (
   responseText: string,
   stage: ScaffoldStage,
 ) =>
-  api.post<Reflection>(`/api/sessions/${token}/reflections`, {
+  api.post<ReflectionResponse>(`/api/sessions/${token}/reflections`, {
     prompt_text: promptText,
     response_text: responseText,
     stage,
@@ -58,6 +58,9 @@ export const submitReflection = (
 
 export const requestGuidance = (sessionToken: string) =>
   api.post<GuidanceResponse>('/api/guidance/next', { session_token: sessionToken }).then(r => r.data)
+
+export const requestExplanation = (sessionToken: string) =>
+  api.post<GuidanceResponse>('/api/guidance/explanation', { session_token: sessionToken }).then(r => r.data)
 
 export const advanceStage = (sessionToken: string) =>
   api.post<{ stage: ScaffoldStage }>('/api/guidance/advance', { session_token: sessionToken }).then(r => r.data)

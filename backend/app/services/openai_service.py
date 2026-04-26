@@ -24,14 +24,15 @@ Examples: "Consider isolating the variable before substituting values."
           "Think about which theorem applies when two parallel lines are cut by a transversal."
 """
 
-PARTIAL_HINT_PROMPT = """You are a Socratic learning assistant. 
-Problem: {problem_statement}
-Student's attempts: {attempts_summary}
-Student's reflection: {reflection_text}
+PARTIAL_HINT_PROMPT = """You are a helpful learning assistant. The student has attempted this problem multiple times and needs a detailed walkthrough.
 
-Generate a PARTIAL HINT — a concrete first step they can take, but stop before revealing the solution.
-Keep it to 1-2 sentences. Do NOT solve the problem.
-Example: "Start by subtracting 3 from both sides to isolate the variable term."
+Problem: {problem_statement}
+Student's attempts so far: {attempts_summary}
+Student's earlier reflection: {reflection_text}
+
+Provide a DETAILED STEP-BY-STEP EXPLANATION of the approach. Cover the key concepts and intermediate steps clearly.
+Do NOT state the final answer itself — stop one step before revealing it.
+End with a short encouraging question that nudges them to complete the last step on their own.
 """
 
 FULL_SOLUTION_PROMPT = """You are a helpful tutor. 
@@ -58,6 +59,31 @@ REFLECTION_PROMPT_TEMPLATES = [
     "What have you tried so far, and why do you think it didn't work?",
     "What information from the problem statement feels most important to you?",
 ]
+
+ENCOURAGEMENT_PROMPT = """You are a supportive learning assistant. A student has already received strategy cues and a detailed explanation but is still working through the problem.
+
+Problem: {problem_statement}
+Number of attempts so far: {attempt_count}
+
+Write a SHORT (2-3 sentences) encouraging message that:
+1. Acknowledges their persistence
+2. Reminds them to re-read the explanation already shown above
+3. Encourages them to try once more — they are close
+
+Do NOT reveal the answer or add any new hints. Keep it warm and brief."""
+
+REFLECTION_EVAL_PROMPT = """You are evaluating a student's reflection quality before providing AI tutoring guidance.
+
+Problem: {problem_statement}
+Reflection prompt shown to student: {reflection_prompt}
+Student's response: {response_text}
+
+Decide if the response shows genuine cognitive effort.
+Mark as POOR if the response is: random characters, gibberish, fewer than 5 meaningful words, completely off-topic, or dismissive (e.g. "idk", "no idea", "abc").
+Mark as GOOD if the response shows any real attempt to think about the problem — even if the reasoning is incorrect.
+
+Respond with JSON only, no extra text:
+{{"quality": "good" or "poor", "nudge": "if poor: a short 1-2 sentence warm nudge asking them to try harder. If good: null"}}"""
 
 
 # ─── Service Functions ───────────────────────────────────────────────────────
@@ -112,6 +138,21 @@ def generate_full_solution(problem_statement: str, attempt_count: int) -> str:
     return response.choices[0].message.content.strip()
 
 
+def generate_encouragement(problem_statement: str, attempt_count: int) -> str:
+    """Encouragement without new hints — used for minimal/moderate on failure at partial_hint."""
+    prompt = ENCOURAGEMENT_PROMPT.format(
+        problem_statement=problem_statement,
+        attempt_count=attempt_count,
+    )
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=100,
+        temperature=0.5,
+    )
+    return response.choices[0].message.content.strip()
+
+
 def generate_alternative_explanation(
     problem_statement: str,
     original_solution: str,
@@ -133,3 +174,36 @@ def generate_alternative_explanation(
 def get_reflection_prompt(stage_index: int = 0) -> str:
     """Returns a reflective question to show the student before assistance."""
     return REFLECTION_PROMPT_TEMPLATES[stage_index % len(REFLECTION_PROMPT_TEMPLATES)]
+
+
+def evaluate_reflection(
+    problem_statement: str,
+    reflection_prompt: str,
+    response_text: str,
+) -> dict:
+    """
+    Evaluates whether a student's reflection shows genuine cognitive effort.
+    Returns {"accepted": bool, "nudge": str | None}.
+    """
+    import json
+
+    prompt = REFLECTION_EVAL_PROMPT.format(
+        problem_statement=problem_statement,
+        reflection_prompt=reflection_prompt,
+        response_text=response_text,
+    )
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=150,
+        temperature=0.2,
+        response_format={"type": "json_object"},
+    )
+    raw = response.choices[0].message.content.strip()
+    try:
+        result = json.loads(raw)
+        accepted = result.get("quality", "good") == "good"
+        nudge = result.get("nudge") if not accepted else None
+        return {"accepted": accepted, "nudge": nudge}
+    except Exception:
+        return {"accepted": True, "nudge": None}

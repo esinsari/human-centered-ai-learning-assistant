@@ -6,8 +6,9 @@ from app.models.models import LearningSession, Attempt, Reflection, Problem
 from app.schemas.schemas import (
     SessionCreate, SessionOut, SessionUpdate,
     AttemptCreate, AttemptResponse, AttemptOut,
-    ReflectionCreate, ReflectionOut,
+    ReflectionCreate, ReflectionOut, ReflectionResponse,
 )
+from app.services.openai_service import evaluate_reflection
 
 router = APIRouter()
 
@@ -97,13 +98,23 @@ def submit_attempt(token: str, data: AttemptCreate, db: DBSession = Depends(get_
     )
 
 
-@router.post("/{token}/reflections", response_model=ReflectionOut, status_code=201)
+@router.post("/{token}/reflections", response_model=ReflectionResponse, status_code=201)
 def submit_reflection(token: str, data: ReflectionCreate, db: DBSession = Depends(get_db)):
     """
     Submit a required reflection before guidance is unlocked.
-    Sets reflection_done = True on the session.
+    Runs AI quality evaluation — only sets reflection_done=True if accepted.
     """
     session = _get_session_or_404(token, db)
+    problem = db.query(Problem).filter(Problem.id == session.problem_id).first()
+
+    eval_result = evaluate_reflection(
+        problem_statement=problem.statement if problem else "",
+        reflection_prompt=data.prompt_text,
+        response_text=data.response_text,
+    )
+
+    if not eval_result["accepted"]:
+        return ReflectionResponse(accepted=False, nudge=eval_result["nudge"])
 
     reflection = Reflection(
         session_id=session.id,
@@ -115,4 +126,7 @@ def submit_reflection(token: str, data: ReflectionCreate, db: DBSession = Depend
     session.reflection_done = True
     db.commit()
     db.refresh(reflection)
-    return reflection
+    return ReflectionResponse(
+        accepted=True,
+        reflection=ReflectionOut.model_validate(reflection),
+    )

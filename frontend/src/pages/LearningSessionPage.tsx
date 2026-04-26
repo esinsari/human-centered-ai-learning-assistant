@@ -33,8 +33,20 @@ export default function LearningSessionPage() {
   const [altExplanation, setAltExplanation] = useState('')
   const [loadingAlt, setLoadingAlt] = useState(false)
   const [solutionShownInChat, setSolutionShownInChat] = useState(false)
+  const [pendingFullSolution, setPendingFullSolution] = useState('')
+  const [timerPhase, setTimerPhase] = useState<'idle' | 'counting' | 'confirm' | 'revealed'>('idle')
+  const [timerCount, setTimerCount] = useState(5)
+  const [awaiting2ndAttempt, setAwaiting2ndAttempt] = useState(false)
 
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // 5-second countdown for delayed full solution reveal
+  useEffect(() => {
+    if (timerPhase !== 'counting') return
+    if (timerCount <= 0) { setTimerPhase('confirm'); return }
+    const id = setTimeout(() => setTimerCount(c => c - 1), 1000)
+    return () => clearTimeout(id)
+  }, [timerPhase, timerCount])
 
   // Reset all local state when navigating to a different session
   useEffect(() => {
@@ -46,6 +58,10 @@ export default function LearningSessionPage() {
     setAltExplanation('')
     setLoadingAlt(false)
     setSolutionShownInChat(false)
+    setPendingFullSolution('')
+    setTimerPhase('idle')
+    setTimerCount(5)
+    setAwaiting2ndAttempt(false)
   }, [sessionToken])
 
   // Auto-scroll chat to bottom on new messages
@@ -73,6 +89,7 @@ export default function LearningSessionPage() {
 
   const handleSubmitAnswer = async () => {
     if (!selectedOption) return
+    setAwaiting2ndAttempt(false)
     const isCorrect = correctOption ? selectedOption === correctOption : false
     const result = await submitAnswer(selectedOption)
     if (result.feedback === 'correct' || isCorrect) {
@@ -85,9 +102,19 @@ export default function LearningSessionPage() {
       // result.guidance is returned directly from submitAnswer — no stale closure issue
       const guidance = result.guidance
       if (guidance?.reflection_prompt) {
+        // Attempt 1 wrong — show reflection prompt, fresh chat
         setChatMessages([{ role: 'ai', text: guidance.reflection_prompt }])
       } else if (guidance?.content) {
-        setChatMessages([{ role: 'ai', text: guidance.content }])
+        if (guidance.stage === 'full_solution') {
+          // Attempt 3 wrong — delayed full solution with timer
+          setPendingFullSolution(guidance.content)
+          setTimerPhase('counting')
+          setTimerCount(5)
+        } else {
+          // Attempt 2 wrong — detailed explanation, lock chat and ask to retry
+          setChatMessages(prev => [...prev, { role: 'ai', text: guidance.content }])
+          setAwaiting2ndAttempt(true)
+        }
       } else {
         setChatMessages([{ role: 'ai', text: 'Which concept do you think applies here? What pattern did you notice in the expression?' }])
       }
@@ -103,10 +130,12 @@ export default function LearningSessionPage() {
     } else if (guidance.reflection_prompt) {
       setChatMessages(prev => [...prev, { role: 'ai', text: guidance.reflection_prompt! }])
     } else if (guidance.content) {
-      setChatMessages(prev => [...prev, { role: 'ai', text: guidance.content }])
       if (guidance.stage === 'full_solution') {
-        setSolutionContent(guidance.content)
-        setSolutionShownInChat(true)
+        setPendingFullSolution(guidance.content)
+        setTimerPhase('counting')
+        setTimerCount(5)
+      } else {
+        setChatMessages(prev => [...prev, { role: 'ai', text: guidance.content }])
       }
     }
   }
@@ -117,7 +146,15 @@ export default function LearningSessionPage() {
     setChatInput('')
     setChatMessages(prev => [...prev, { role: 'user', text }])
 
-    const guidance = await submitReflection(text, session.scaffold_stage ?? 'strategy_cue')
+    const result = await submitReflection(text, session.scaffold_stage ?? 'strategy_cue')
+    if (!result) return
+
+    if (!result.accepted) {
+      setChatMessages(prev => [...prev, { role: 'ai', text: result.nudge ?? "Could you share a bit more about your thinking? Try to explain the approach or concept you have in mind." }])
+      return
+    }
+
+    const guidance = result.guidance
     if (!guidance) return
 
     if (guidance.effort_gate) {
@@ -125,12 +162,25 @@ export default function LearningSessionPage() {
     } else if (guidance.reflection_required && guidance.reflection_prompt) {
       setChatMessages(prev => [...prev, { role: 'ai', text: guidance.reflection_prompt! }])
     } else if (guidance.content) {
-      setChatMessages(prev => [...prev, { role: 'ai', text: guidance.content }])
       if (guidance.stage === 'full_solution') {
-        setSolutionContent(guidance.content)
-        setSolutionShownInChat(true)
+        setPendingFullSolution(guidance.content)
+        setTimerPhase('counting')
+        setTimerCount(5)
+      } else {
+        setChatMessages(prev => [...prev, { role: 'ai', text: guidance.content }])
+        if (guidance.stage === 'strategy_cue') {
+          setAwaiting2ndAttempt(true)
+        }
       }
     }
+  }
+
+  const handleConfirmSolution = async () => {
+    setTimerPhase('revealed')
+    setSolutionContent(pendingFullSolution)
+    setSolutionShownInChat(true)
+    setChatMessages(prev => [...prev, { role: 'ai', text: pendingFullSolution }])
+    await advanceStage(sessionToken ?? '')
   }
 
   const handleAltExplanation = async () => {
@@ -221,12 +271,13 @@ export default function LearningSessionPage() {
           <div className="flex gap-3">
             <button
               onClick={handleRequestGuidance}
-              disabled={isLoadingGuidance}
+              disabled={isLoadingGuidance || awaiting2ndAttempt}
               className="px-5 py-2.5 rounded text-sm font-medium border transition-colors"
               style={{
                 background: panelState === 'guidance_requested' ? '#7c3aed' : '#e8e8e8',
-                color: panelState === 'guidance_requested' ? '#fff' : '#333',
+                color: panelState === 'guidance_requested' ? '#fff' : awaiting2ndAttempt ? '#999' : '#333',
                 borderColor: panelState === 'guidance_requested' ? '#7c3aed' : '#ccc',
+                cursor: awaiting2ndAttempt ? 'not-allowed' : 'pointer',
               }}
             >
               Request Guidance
@@ -364,6 +415,55 @@ export default function LearningSessionPage() {
                   </div>
                 )}
 
+                {/* Delayed full solution: timer + confirm */}
+                {(timerPhase === 'counting' || timerPhase === 'confirm') && (
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-xs text-gray-500 px-1">AI Learning Assistant</span>
+                    <div
+                      className="px-4 py-3 rounded-lg text-sm max-w-[90%]"
+                      style={{ background: '#4c1d95', color: '#fff', border: '1px solid #7c3aed' }}
+                    >
+                      <p className="font-semibold mb-2">Full Solution Ready</p>
+                      {timerPhase === 'counting' ? (
+                        <>
+                          <p className="text-purple-200 text-xs mb-3">
+                            Take a moment to reflect before viewing the solution.
+                          </p>
+                          <div className="flex items-center gap-3">
+                            <div className="relative w-10 h-10 flex-shrink-0">
+                              <svg className="w-10 h-10" style={{ transform: 'rotate(-90deg)' }} viewBox="0 0 36 36">
+                                <circle cx="18" cy="18" r="15" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                <circle
+                                  cx="18" cy="18" r="15" fill="none" stroke="#a78bfa" strokeWidth="3"
+                                  strokeDasharray={`${(timerCount / 5) * 94.25} 94.25`}
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                              <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
+                                {timerCount}
+                              </span>
+                            </div>
+                            <span className="text-purple-200 text-xs">Reflecting…</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-purple-200 text-xs mb-3">
+                            Reflection time complete. Ready to view the full solution?
+                          </p>
+                          <button
+                            onClick={handleConfirmSolution}
+                            className="px-4 py-1.5 rounded text-sm font-semibold transition-colors"
+                            style={{ background: '#7c3aed', color: '#fff' }}
+                          >
+                            View Full Solution →
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Alternative explanation (after full solution) */}
                 {solutionShownInChat && (
                   <div className="mt-1">
@@ -392,8 +492,15 @@ export default function LearningSessionPage() {
                 <div ref={chatEndRef} />
               </div>
 
+              {/* "Try again" nudge shown after strategy cue */}
+              {awaiting2ndAttempt && timerPhase === 'idle' && !solutionShownInChat && (
+                <div className="flex-shrink-0 px-4 py-3 border-t border-gray-700 text-center">
+                  <p className="text-xs text-purple-300 font-medium">Select your answer above and click Submit Answer to try again.</p>
+                </div>
+              )}
+
               {/* Input */}
-              {!solutionShownInChat && (
+              {!solutionShownInChat && timerPhase === 'idle' && !awaiting2ndAttempt && (
                 <div className="flex-shrink-0 px-3 py-3 border-t border-gray-700 flex items-center gap-2">
                   <input
                     type="text"

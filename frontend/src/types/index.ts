@@ -58,6 +58,12 @@ export interface Reflection {
   submitted_at: string
 }
 
+export interface ReflectionResponse {
+  accepted: boolean
+  nudge?: string | null
+  reflection?: Reflection | null
+}
+
 export interface GuidanceResponse {
   stage: ScaffoldStage
   content: string

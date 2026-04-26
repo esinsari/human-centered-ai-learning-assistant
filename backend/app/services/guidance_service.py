@@ -76,6 +76,13 @@ def get_next_guidance(db: Session, session: LearningSession, problem_statement: 
     )
 
 
+def get_next_stage(session: LearningSession) -> ScaffoldStage:
+    """Returns what the next scaffold stage would be without advancing."""
+    stage_order = [ScaffoldStage.none, ScaffoldStage.strategy_cue, ScaffoldStage.partial_hint, ScaffoldStage.full_solution]
+    current_idx = stage_order.index(session.scaffold_stage)
+    return stage_order[min(current_idx + 1, len(stage_order) - 1)]
+
+
 def advance_stage(db: Session, session: LearningSession) -> LearningSession:
     """Move session to the next scaffold stage after reflection/confirmation."""
     stage_order = [
@@ -91,6 +98,10 @@ def advance_stage(db: Session, session: LearningSession) -> LearningSession:
     db.commit()
     db.refresh(session)
     return session
+
+
+def generate_content(session: LearningSession, stage: ScaffoldStage, problem_statement: str) -> str:
+    return _generate_content(session, stage, problem_statement)
 
 
 def _generate_content(session: LearningSession, stage: ScaffoldStage, problem_statement: str) -> str:
