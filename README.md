@@ -1,4 +1,4 @@
-# StriveAI — Human-Centered AI Learning Assistant
+# Human-Centered AI Learning Assistant
 
 A lightweight web-based learning assistant that preserves cognitive effort through structured scaffolding and beneficial AI guidance.
 
@@ -19,7 +19,7 @@ cd backend
 python -m venv venv
 source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env          # Add your OpenAI API key
+cp .env.example .env          
 uvicorn app.main:app --reload
 ```
 
@@ -41,7 +41,7 @@ npm run dev
 ## Key Features (from proposal)
 - Staged guidance: Strategy Cue → Partial Hint → Full Solution
 - Reflection-before-assistance enforcement
-- Effort threshold tracking (min 2 attempts OR reflection submitted)
+- Effort threshold tracking (min 3 attempts OR reflection submitted)
 - 5-second reflection timer before full solution reveal
 - Transparency panel + alternative explanations
 - Adjustable guidance levels (minimal / moderate / high)

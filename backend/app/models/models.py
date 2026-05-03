@@ -8,7 +8,7 @@ Tables:
   reflections     — student reflection text submitted before assistance
 """
 
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.database import Base
@@ -64,7 +64,6 @@ class LearningSession(Base):
     scaffold_stage  = Column(Enum(ScaffoldStage), default=ScaffoldStage.none)
     attempt_count   = Column(Integer, default=0)
     reflection_done = Column(Boolean, default=False)
-    confidence_rating = Column(Float, nullable=True)              # 0.0–1.0
     completed       = Column(Boolean, default=False)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
     updated_at      = Column(DateTime(timezone=True), onupdate=func.now())

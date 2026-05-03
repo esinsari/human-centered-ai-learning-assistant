@@ -2,7 +2,7 @@
 Pydantic schemas — request bodies and response shapes for all API endpoints.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from app.models.models import GuidanceLevel, ScaffoldStage
@@ -57,7 +57,6 @@ class SessionOut(BaseModel):
     scaffold_stage: ScaffoldStage
     attempt_count: int
     reflection_done: bool
-    confidence_rating: Optional[float]
     completed: bool
     created_at: datetime
 
@@ -67,7 +66,6 @@ class SessionOut(BaseModel):
 
 class SessionUpdate(BaseModel):
     guidance_level: Optional[GuidanceLevel] = None
-    confidence_rating: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 
 # ─── Attempt ─────────────────────────────────────────────────────────────────

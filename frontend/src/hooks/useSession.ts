@@ -116,14 +116,6 @@ export function useSession(sessionToken: string) {
     [sessionToken],
   )
 
-  const submitConfidence = useCallback(
-    async (rating: number) => {
-      const updated = await api.updateSession(sessionToken, { confidence_rating: rating })
-      store.setSession(updated)
-    },
-    [sessionToken],
-  )
-
   return {
     session: store.session,
     problem: store.problem,
@@ -137,6 +129,5 @@ export function useSession(sessionToken: string) {
     submitReflection,
     confirmSolutionView,
     updateGuidanceLevel,
-    submitConfidence,
   }
 }

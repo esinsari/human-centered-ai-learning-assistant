@@ -28,7 +28,6 @@ export interface LearningSession {
   scaffold_stage: ScaffoldStage
   attempt_count: number
   reflection_done: boolean
-  confidence_rating: number | null
   completed: boolean
   created_at: string
 }

@@ -34,7 +34,7 @@ export const createSession = (problemId: number, guidanceLevel: GuidanceLevel = 
 export const getSession = (token: string) =>
   api.get<LearningSession>(`/api/sessions/${token}`).then(r => r.data)
 
-export const updateSession = (token: string, patch: { guidance_level?: GuidanceLevel; confidence_rating?: number }) =>
+export const updateSession = (token: string, patch: { guidance_level?: GuidanceLevel }) =>
   api.patch<LearningSession>(`/api/sessions/${token}`, patch).then(r => r.data)
 
 export const submitAttempt = (token: string, answerText: string) =>

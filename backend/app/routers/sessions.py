@@ -41,12 +41,10 @@ def get_session(token: str, db: DBSession = Depends(get_db)):
 
 @router.patch("/{token}", response_model=SessionOut)
 def update_session(token: str, data: SessionUpdate, db: DBSession = Depends(get_db)):
-    """Update guidance level or confidence rating."""
+    """Update guidance level."""
     session = _get_session_or_404(token, db)
     if data.guidance_level is not None:
         session.guidance_level = data.guidance_level
-    if data.confidence_rating is not None:
-        session.confidence_rating = data.confidence_rating
     db.commit()
     db.refresh(session)
     return session
